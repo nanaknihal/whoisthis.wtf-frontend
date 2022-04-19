@@ -20,9 +20,6 @@ import CircleWavyCheck from '../img/CircleWavyCheck.svg';
 import Orcid from '../img/Orcid.svg';
 import TwitterLogo from '../img/TwitterLogo.svg';
 
-import wtf from 'wtf-lib';
-console.log(wtf)
-wtf.setProviderURL({polygon : 'https://speedy-nodes-nyc.moralis.io/a1167200f0a0e81dd757304e/polygon/mumbai'})
 const { ethers } = require('ethers');
 
 // TODO: better error handling
@@ -111,19 +108,18 @@ const InnerAuthenticationFlow = (props) => {
       twitter: null
     }
     const [userHolo, setUserHolo] = useState(defaultHolo)
-    // Load the user's Holo when the page loads
     useEffect(async () => {
       try {
-        // if props has provider but not account for some reason, get the account:
-        let account; 
-        if(props.provider){account = props.account || await props.provider.getSigner().getAddress()}
-        wtf.setProviderURL({polygon : 'https://speedy-nodes-nyc.moralis.io/a1167200f0a0e81dd757304e/polygon/mumbai'})
-        let holo_ = (await wtf.getHolo(account))[props.desiredChain]
+        const url = `https://sciverse.id/getHolo?address=${props.account}`
+        console.log('FETCHING', url)
+        const response = await fetch(url) // TODO: try-catch. Need to catch timeouts and such
+        const holoData = await response.json()
+        const holo_ = holoData['holo'][props.desiredChain]
+        console.log('HOLO', props.desiredChain, holoData.holo[props.desiredChain])
         setUserHolo({... defaultHolo, ... holo_.creds, 'name' : holo_.name, 'bio' : holo_.bio})
-      } catch(err) {
-        console.log('Error:', err)
+      } catch(error) {
+        console.log(error)
       }
-      
     }, [props.desiredChain, props.provider, props.account]);
     
     let revealBlock = 0; //block when user should be prompted to reveal their JWT
