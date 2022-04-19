@@ -14,8 +14,9 @@ import CircleWavy from '../img/CircleWavy.svg';
 import CircleWavyCheck from '../img/CircleWavyCheck.svg';
 import Orcid from '../img/Orcid.svg';
 import TwitterLogo from '../img/TwitterLogo.svg';
-import profile from '../img/profile.svg'
-import { lookup } from 'dns';
+import profile from '../img/profile.svg';
+import { linkFor } from '../link-for.js';
+
 // import ToggleButton from 'react-bootstrap/ToggleButton'
 // import ButtonGroup from 'react-bootstrap/ButtonGroup'
 // import 'bootstrap/dist/css/bootstrap.css';
@@ -108,7 +109,9 @@ const Holo = (props) => {
             return <>
                 <div class="card-text-div"><img src={icons[k]} loading="lazy" alt="" class="card-logo" />
                     <div class="card-text">{holo[k] || 'Not listed'}</div>
-                    <img src={holo[k] ? CircleWavyCheck : CircleWavy} loading="lazy" alt="" class="id-verification-icon" />
+                    <a href={linkFor(k, holo[k])}>
+                      <img src={holo[k] ? CircleWavyCheck : CircleWavy} loading="lazy" alt="" class="id-verification-icon" />
+                    </a>
                 </div>
                 <div class="spacer-x-small"></div>
             </>
