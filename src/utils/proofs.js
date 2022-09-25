@@ -1,15 +1,17 @@
 import { ethers } from "ethers";
 import { initialize } from "zokrates-js";
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree";
-import { zkIdVerifyEndpoint, preprocEndpoint, serverAddress } from "../constants/misc";
+import { preprocEndpoint, serverAddress } from "../constants/misc";
 import zokABIs from "../constants/abi/ZokABIs.json";
 
 let zokProvider;
 let artifacts = {};
+let provingKeys = {};
 
 async function loadArtifacts(circuitName) {
   if (circuitName in artifacts) {
-    console.log(`Note: Trying to load ${circuitName} artifacts, which have already been loaded. Aborting`);
+    console.log(`Note: Trying to load ${circuitName} artifacts, which have already been loaded. Not reloading`);
+    return;
   }
   const program = await (await fetch(`${preprocEndpoint}/${circuitName}Program`)).arrayBuffer();
   const abi = zokABIs[circuitName];
@@ -18,6 +20,15 @@ async function loadArtifacts(circuitName) {
     program : new Uint8Array(program),
     abi : abi
   };
+}
+
+async function loadProvingKey(circuitName) {
+  if (circuitName in provingKeys) {
+    console.log(`Note: Trying to load ${circuitName} provingKey, which has already been loaded. Not reloading`);
+    return
+  }
+  const k = await (await fetch(`${preprocEndpoint}/${circuitName}.proving.key`)).arrayBuffer();
+  provingKeys[circuitName] = new Uint8Array(k)
 }
 
 loadArtifacts("poseidonQuinary").then(()=>console.log("Poseidon hash loaded"));
@@ -230,8 +241,7 @@ export async function onAddLeafProof(
     birthdate
   );
 
-  const resp = await fetch(`${zkIdVerifyEndpoint}/proving-keys/onAddLeaf`);
-  const provingKey = new Uint8Array(await resp.json());
+  // const provingKey = new Uint8Array(await resp.json());
   const args = [
     ethers.BigNumber.from(signedLeaf).toString(),
     ethers.BigNumber.from(newLeaf).toString(),
@@ -245,11 +255,12 @@ export async function onAddLeafProof(
   ];
   // onAddLeafArtifacts = onAddLeafArtifacts ? onAddLeafArtifacts : zokProvider.compile(onAddLeafArtifacts);
   await loadArtifacts("onAddLeaf");
+  await loadProvingKey("onAddLeaf");
   const { witness, output } = zokProvider.computeWitness(artifacts.onAddLeaf, args);
   const proof = zokProvider.generateProof(
     artifacts.onAddLeaf.program,
     witness,
-    provingKey
+    provingKeys.onAddLeaf
   );
   return proof;
 }
@@ -281,8 +292,6 @@ export async function proofOfResidency(
     // TODO: Make this more sophisticated. Wait for zokProvider to be set or for timeout (e.g., 10s)
     await sleep(5000);
   }
-  const resp = await fetch(`${zkIdVerifyEndpoint}/proving-keys/lobby3`);
-  const provingKey = new Uint8Array(await resp.json());
   const args = [
     ethers.BigNumber.from(issuer).toString(),
     ethers.BigNumber.from(countryCode).toString(),
@@ -296,17 +305,15 @@ export async function proofOfResidency(
     indices,
   ];
 
-  await loadArtifacts("proofOfResidency")
-  console.log("this ran 6.9")
+  await loadArtifacts("proofOfResidency");
+  await loadProvingKey("proofOfResidency");
   console.log(artifacts.proofOfResidency)
   const { witness, output } = zokProvider.computeWitness(artifacts.proofOfResidency, args);
-  console.log("this ran 6..9")
   const proof = zokProvider.generateProof(
     artifacts.proofOfResidency.program,
     witness,
-    provingKey
+    provingKeys.proofOfResidency
   );
-  console.log("this ran 95")
   return proof;
 }
 
