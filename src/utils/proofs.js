@@ -1,53 +1,77 @@
 import { ethers } from "ethers";
 import { initialize } from "zokrates-js";
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree";
-import { zkIdVerifyEndpoint, serverAddress } from "../constants/misc";
+import { zkIdVerifyEndpoint, preprocEndpoint, serverAddress } from "../constants/misc";
+import zokABIs from "../constants/abi/ZokABIs.json";
 
-const poseidonCodeQuinary = `import "hashes/poseidon/poseidon" as poseidon;
-def main(field n1, field n2, field n3, field n4, field n5) -> field {
-    return poseidon([n1, n2, n3, n4, n5]);
-}`;
+// const poseidonCodeQuinary = `import "hashes/poseidon/poseidon" as poseidon;
+// def main(field n1, field n2, field n3, field n4, field n5) -> field {
+//     return poseidon([n1, n2, n3, n4, n5]);
+// }`;
 const createLeafCode = `import "hashes/poseidon/poseidon" as poseidon;
 def main(field address, private field secret, private field countryCode, private field subdivision, private field completedAt, private field birthdate) -> field {
     return poseidon([address, secret, countryCode, subdivision, completedAt, birthdate]);
 }`;
-const lobby3ProofCode = `import "hashes/poseidon/poseidon" as poseidon;
-const u32 DEPTH = 14; // TODO: Modify before production
-const u32 ARITY=5; // Quinary tree
-def main(field address, field countryCode, private field subdivision, private field completedAt, private field birthdate, private field nullifier, field root, private field leaf, private field[DEPTH][ARITY] path, private u32[DEPTH] indices) {
-    // assert valid preimage
-    field[6] preimage = [address, nullifier, countryCode, subdivision, completedAt, birthdate];
-    assert(poseidon(preimage) == leaf);
+// const lobby3ProofCode = `import "hashes/poseidon/poseidon" as poseidon;
+// const u32 DEPTH = 14; // TODO: Modify before production
+// const u32 ARITY=5; // Quinary tree
+// def main(field address, field countryCode, private field subdivision, private field completedAt, private field birthdate, private field nullifier, field root, private field leaf, private field[DEPTH][ARITY] path, private u32[DEPTH] indices) {
+//     // assert valid preimage
+//     field[6] preimage = [address, nullifier, countryCode, subdivision, completedAt, birthdate];
+//     assert(poseidon(preimage) == leaf);
     
-    // Merkle proof
-    field mut digest = leaf;
-    for u32 i in 0..DEPTH {
-        // At each step, check for the digest in the next level of path, then calculate the new digest
-        assert(path[i][indices[i]] == digest);
-        digest = poseidon(path[i]);
-    }
-    assert(digest == root);
-    return;
-}`;
-const onAddLeaf = `import "hashes/poseidon/poseidon" as poseidon;
-def main(field signedLeaf, field newLeaf, field address, private field countryCode, private field subdivision, private field completedAt, private field birthdate, private field oldSecret, private field newSecret) {
-    field[6] oldPreimage = [address, oldSecret, countryCode, subdivision, completedAt, birthdate];
-    field[6] newPreimage = [address, newSecret, countryCode, subdivision, completedAt, birthdate];
-    assert(poseidon(oldPreimage) == signedLeaf);
-    assert(poseidon(newPreimage) == newLeaf);
-    return;
-}`;
+//     // Merkle proof
+//     field mut digest = leaf;
+//     for u32 i in 0..DEPTH {
+//         // At each step, check for the digest in the next level of path, then calculate the new digest
+//         assert(path[i][indices[i]] == digest);
+//         digest = poseidon(path[i]);
+//     }
+//     assert(digest == root);
+//     return;
+// }`;
+// const onAddLeaf = `import "hashes/poseidon/poseidon" as poseidon;
+// def main(field signedLeaf, field newLeaf, field address, private field countryCode, private field subdivision, private field completedAt, private field birthdate, private field oldSecret, private field newSecret) {
+//     field[6] oldPreimage = [address, oldSecret, countryCode, subdivision, completedAt, birthdate];
+//     field[6] newPreimage = [address, newSecret, countryCode, subdivision, completedAt, birthdate];
+//     assert(poseidon(oldPreimage) == signedLeaf);
+//     assert(poseidon(newPreimage) == newLeaf);
+//     return;
+// }`;
 let zokProvider;
-let poseidonQuinaryArtifacts;
-let createLeafArtifacts;
-let lobby3ProofArtifacts;
-let onAddLeafArtifacts;
-initialize().then((zokratesProvider) => {
+let artifacts = {};
+
+async function loadArtifacts(circuitName) {
+  if (circuitName in artifacts) {
+    console.log(`Note: Trying to load ${circuitName} artifacts, which have already been loaded. Aborting`);
+  }
+  const program = await (await fetch(`${preprocEndpoint}/${circuitName}Program`)).arrayBuffer();
+  const abi = zokABIs[circuitName];
+
+  artifacts[circuitName] = {
+    program : new Uint8Array(program),
+    abi : abi
+  };
+}
+initialize().then(async (zokratesProvider) => {
   zokProvider = zokratesProvider;
-  poseidonQuinaryArtifacts = zokProvider.compile(poseidonCodeQuinary);
-  createLeafArtifacts = zokProvider.compile(createLeafCode);
-  lobby3ProofArtifacts = zokProvider.compile(lobby3ProofCode);
-  onAddLeafArtifacts = zokProvider.compile(onAddLeaf);
+  loadArtifacts("poseidonQuinary").then(()=>console.log("Poseidon hash loaded"))
+  // const d1 = Date.now();
+  // poseidonQuinaryArtifacts = zokProvider.compile(poseidonCodeQuinary);
+  // console.log((Date.now() - d1) / 1000, "s poseidonCodeQuinary");
+
+  // const d2 = Date.now();
+  // createLeafArtifacts = zokProvider.compile(createLeafCode);
+  // console.log((Date.now() - d2) / 1000, "s createLeafCode");
+
+  // const d3 = Date.now();
+  // lobby3ProofArtifacts = zokProvider.compile(lobby3ProofCode);
+  // console.log((Date.now() - d3) / 1000, "s lobby3ProofCode");
+  
+  // const d4 = Date.now();
+  // onAddLeafArtifacts = zokProvider.compile(onAddLeaf);
+  // console.log((Date.now() - d4) / 1000, "s onAddLeaf");
+
 });
 
 /**
@@ -168,8 +192,12 @@ export function poseidonHashQuinary(input) {
   if (!zokProvider) {
     throw new Error("zokProvider has not been initialized");
   }
+  if (!("poseidonQuinary" in artifacts)) {
+    throw new Error("Poseidon hash has not been loaded");
+  }
+  // console.log("artifacts should have poseidon:", artifacts)
   const { witness, output } = zokProvider.computeWitness(
-    poseidonQuinaryArtifacts,
+    artifacts.poseidonQuinary,
     input
   );
   return output.replaceAll('"', "");
@@ -192,10 +220,13 @@ export async function createLeaf(
   completedAt,
   birthdate
 ) {
+  console.log("running");
   if (!zokProvider) {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // TODO: Make this more sophisticated. Wait for zokProvider to be set or for timeout (e.g., 10s)
+    console.log("waiting for zok provider");
     await sleep(5000);
+    
   }
   const args = [
     ethers.BigNumber.from(issuer).toString(),
@@ -205,7 +236,9 @@ export async function createLeaf(
     ethers.BigNumber.from(completedAt).toString(),
     ethers.BigNumber.from(birthdate).toString(),
   ];
-  const { witness, output } = zokProvider.computeWitness(createLeafArtifacts, args);
+  await loadArtifacts("createLeaf");
+  // console.log("artifacts should have createLeaf", artifacts);
+  const { witness, output } = zokProvider.computeWitness(artifacts.createLeaf, args);
   return output.replaceAll('"', "");
 }
 
@@ -241,6 +274,7 @@ export async function onAddLeafProof(
     completedAt,
     birthdate
   );
+  console.log("signed leaf", signedLeaf)
   const newLeaf = await createLeaf(
     serverAddress,
     newSecret,
@@ -249,6 +283,7 @@ export async function onAddLeafProof(
     completedAt,
     birthdate
   );
+  console.log("new leaf", newLeaf)
   const resp = await fetch(`${zkIdVerifyEndpoint}/proving-keys/onAddLeaf`);
   const provingKey = new Uint8Array(await resp.json());
   const args = [
@@ -262,12 +297,16 @@ export async function onAddLeafProof(
     ethers.BigNumber.from(oldSecret).toString(),
     ethers.BigNumber.from(newSecret).toString(),
   ];
-  const { witness, output } = zokProvider.computeWitness(onAddLeafArtifacts, args);
+  // onAddLeafArtifacts = onAddLeafArtifacts ? onAddLeafArtifacts : zokProvider.compile(onAddLeafArtifacts);
+  await loadArtifacts("onAddLeaf");
+  console.log(artifacts, "artifacts")
+  const { witness, output } = zokProvider.computeWitness(artifacts.onAddLeaf, args);
   const proof = zokProvider.generateProof(
-    onAddLeafArtifacts.program,
+    artifacts.onAddLeaf.program,
     witness,
     provingKey
   );
+  console.log("proof", proof)
   return proof;
 }
 
@@ -312,9 +351,12 @@ export async function lobby3Proof(
     path,
     indices,
   ];
-  const { witness, output } = zokProvider.computeWitness(lobby3ProofArtifacts, args);
+
+  await loadArtifacts("lobby3Proof")
+  console.log("artifacts", artifacts);
+  const { witness, output } = zokProvider.computeWitness(artifacts.lobby3Proof, args);
   const proof = zokProvider.generateProof(
-    lobby3ProofArtifacts.program,
+    artifacts.lobby3Proof.program,
     witness,
     provingKey
   );
@@ -418,52 +460,52 @@ async function testOnAddLeafProof() {
   return proof;
 }
 
-async function testLobby3Proof() {
-  console.log("testLobby3Proof");
-  const issuer = "0x0000000000000000000000000000000000000000";
-  const countryCode = 2;
-  const subdivision = "NY";
-  const completedAt = "0x123456";
-  const birthdate = "0x123456";
+// async function testLobby3Proof() {
+//   console.log("testLobby3Proof");
+//   const issuer = "0x0000000000000000000000000000000000000000";
+//   const countryCode = 2;
+//   const subdivision = "NY";
+//   const completedAt = "0x123456";
+//   const birthdate = "0x123456";
 
-  const secret = "0x00000000000000000000000000000000";
-  const leaf = await createLeaf(
-    issuer,
-    secret,
-    countryCode,
-    subdivision,
-    completedAt,
-    birthdate
-  );
+//   const secret = "0x00000000000000000000000000000000";
+//   const leaf = await createLeaf(
+//     issuer,
+//     secret,
+//     countryCode,
+//     subdivision,
+//     completedAt,
+//     birthdate
+//   );
 
-  const leavesFromContract = []; // TODO: Get leaves from merkle tree smart contract
-  const leaves = [...leavesFromContract, leaf];
-  const tree = new IncrementalMerkleTree(poseidonHashQuinary, 14, "0", 5);
-  for (const item of leaves) {
-    tree.insert(item);
-  }
-  const index = tree.indexOf(leaf);
-  const merkleProof = tree.createProof(index);
-  const serializedMerkleProof = serializeProof(merkleProof, poseidonHashQuinary);
+//   const leavesFromContract = []; // TODO: Get leaves from merkle tree smart contract
+//   const leaves = [...leavesFromContract, leaf];
+//   const tree = new IncrementalMerkleTree(poseidonHashQuinary, 14, "0", 5);
+//   for (const item of leaves) {
+//     tree.insert(item);
+//   }
+//   const index = tree.indexOf(leaf);
+//   const merkleProof = tree.createProof(index);
+//   const serializedMerkleProof = serializeProof(merkleProof, poseidonHashQuinary);
 
-  console.log("generating lobby3Proof...");
-  const proof = await lobby3Proof(
-    issuer,
-    countryCode,
-    subdivision,
-    completedAt,
-    birthdate,
-    secret,
-    // root,
-    serializedMerkleProof[0],
-    // leaf,
-    serializedMerkleProof[1],
-    // path,
-    serializedMerkleProof[2],
-    // indices
-    serializedMerkleProof[3]
-  );
-  console.log("lobby3Proof...");
-  console.log(proof);
-  return proof;
-}
+//   console.log("generating lobby3Proof...");
+//   const proof = await lobby3Proof(
+//     issuer,
+//     countryCode,
+//     subdivision,
+//     completedAt,
+//     birthdate,
+//     secret,
+//     // root,
+//     serializedMerkleProof[0],
+//     // leaf,
+//     serializedMerkleProof[1],
+//     // path,
+//     serializedMerkleProof[2],
+//     // indices
+//     serializedMerkleProof[3]
+//   );
+//   console.log("lobby3Proof...");
+//   console.log(proof);
+//   return proof;
+// }
