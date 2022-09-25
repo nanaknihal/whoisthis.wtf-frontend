@@ -264,7 +264,7 @@ export async function onAddLeafProof(
  * @param {Array<Array<string>>} path Numbers represented as strings
  * @param {Array<string>} indices Numbers represented as strings
  */
-export async function lobby3Proof(
+export async function proofOfResidency(
   issuer,
   countryCode,
   subdivision,
@@ -296,13 +296,17 @@ export async function lobby3Proof(
     indices,
   ];
 
-  await loadArtifacts("lobby3Proof")
-  const { witness, output } = zokProvider.computeWitness(artifacts.lobby3Proof, args);
+  await loadArtifacts("proofOfResidency")
+  console.log("this ran 6.9")
+  console.log(artifacts.proofOfResidency)
+  const { witness, output } = zokProvider.computeWitness(artifacts.proofOfResidency, args);
+  console.log("this ran 6..9")
   const proof = zokProvider.generateProof(
-    artifacts.lobby3Proof.program,
+    artifacts.proofOfResidency.program,
     witness,
     provingKey
   );
+  console.log("this ran 95")
   return proof;
 }
 
@@ -403,8 +407,8 @@ export async function lobby3Proof(
 //   return proof;
 // }
 
-// async function testLobby3Proof() {
-//   console.log("testLobby3Proof");
+// async function testproofOfResidency() {
+//   console.log("testproofOfResidency");
 //   const issuer = "0x0000000000000000000000000000000000000000";
 //   const countryCode = 2;
 //   const subdivision = "NY";
@@ -431,8 +435,8 @@ export async function lobby3Proof(
 //   const merkleProof = tree.createProof(index);
 //   const serializedMerkleProof = serializeProof(merkleProof, poseidonHashQuinary);
 
-//   console.log("generating lobby3Proof...");
-//   const proof = await lobby3Proof(
+//   console.log("generating proofOfResidency...");
+//   const proof = await proofOfResidency(
 //     issuer,
 //     countryCode,
 //     subdivision,
@@ -448,7 +452,7 @@ export async function lobby3Proof(
 //     // indices
 //     serializedMerkleProof[3]
 //   );
-//   console.log("lobby3Proof...");
+//   console.log("proofOfResidency...");
 //   console.log(proof);
 //   return proof;
 // }
