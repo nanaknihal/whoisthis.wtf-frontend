@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useParams } from "react-router-dom";
 import { ethers } from "ethers";
-// import { useAccount, useSignMessage } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree";
 import { requestCredentials } from "../utils/secrets";
 import {
@@ -15,11 +15,14 @@ import {
 } from "../utils/proofs";
 import { serverAddress } from "../constants/misc";
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 const LoadingElement = (props) => <h3 style={{ textAlign: "center" }}>Loading...</h3>
 const Proofs = () => {
   const params = useParams();
   const [creds, setCreds] = useState();
   const [error, setError] = useState();
+  const { address } = useAccount();
 
   async function addLeaf() {
     // onAddLeafProof
@@ -51,7 +54,6 @@ const Proofs = () => {
   }
   
   async function handleLobby3Proofs() {
-    const oldSecret = creds.secret;
     const newSecret = creds.newSecret;
     const leaf = await createLeaf(
       serverAddress,
@@ -61,6 +63,8 @@ const Proofs = () => {
       creds.completedAtHex,
       creds.birthdateHex,
     );
+
+    console.log("leaf", leaf)
     const leavesFromContract = []; // TODO: Get leaves from merkle tree smart contract
     const leaves = [...leavesFromContract, leaf];
     const tree = new IncrementalMerkleTree(poseidonHashQuinary, 14, "0", 5);
@@ -70,24 +74,41 @@ const Proofs = () => {
     const index = tree.indexOf(leaf);
     const merkleProof = tree.createProof(index);
     const serializedMerkleProof = serializeProof(merkleProof, poseidonHashQuinary);
-    const lob3Proof = await proofOfResidency(
+    
+    // if(!address) {
+    //   setError("Please connect your wallet"); 
+    //   await sleep(1000);
+    // } else if(error == "Please connect your wallet") {
+    //   setError("");
+    // }
+    const [root_, leaf_, path_, indices_] = serializedMerkleProof;
+    console.log("args", 
+      root_,
+      address || "0xC8834C1FcF0Df6623Fc8C8eD25064A4148D99388", //Delete that lmao
       serverAddress,
       creds.countryCode,
       creds.subdivisionHex,
       creds.completedAtHex,
       creds.birthdateHex,
       newSecret,
-      // root,
-      serializedMerkleProof[0],
-      // leaf,
-      serializedMerkleProof[1],
-      // path,
-      serializedMerkleProof[2],
-      // indices
-      serializedMerkleProof[3]
+      leaf_, 
+      path_,
+      indices_
     );
-    console.log("lob3Proof");
-    console.log(lob3Proof);
+    const lob3Proof = await proofOfResidency(
+      root_,
+      address || "0xC8834C1FcF0Df6623Fc8C8eD25064A4148D99388", //Delete that lmao      
+      serverAddress,
+      creds.countryCode,
+      creds.subdivisionHex,
+      creds.completedAtHex,
+      creds.birthdateHex,
+      newSecret,
+      leaf_, 
+      path_,
+      indices_
+    );
+    console.log(JSON.stringify(lob3Proof));
     // TODO: Call smart contracts
     // contract.updateLeaf(oalProof)
     // contract.proveResidence(lob3Proof)
@@ -95,8 +116,10 @@ const Proofs = () => {
 
   useEffect(() => {
     async function init() {
-      const c = await requestCredentials();
-      console.log("creds", c);
+      // Delete this line:
+      const c = {birthdate: "1996-09-06", completedAt: "1969-06-09", countryCode: 0, newSecret: "0xb9d3ca1602fad29499f3ee47f729f875", secret: "0x89e0bc2174cb908298ce2f38987995a1", signature: "0x6440eb3b1871fa0e5ad052b81fb6cfe570b8ec74e753c45462778ef5f3302e17071cf538fa78d7c99a2c98e370f7d85ff82942364e8110f2960caf51819128c71b", subdivision: "CA"}
+      // Replace with:
+      // const c = await requestCredentials();
       if (c) {
         setCreds({
           ...c, 
@@ -111,6 +134,7 @@ const Proofs = () => {
     }
     init();
   }, []);
+
   useEffect(() => {
     console.log("entered useEffect");
     if (!creds) return;
